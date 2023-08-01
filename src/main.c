@@ -267,26 +267,26 @@ void log_entry_ui(orca_debug_overlay* overlay, log_entry* entry)
 }
 
 
-char m3_type_to_tag(M3ValueType type)
-{
-	switch(type)
-	{
-		case c_m3Type_none:
-			return('v');
-		case c_m3Type_i32:
-			return('i');
-		case c_m3Type_i64:
-			return('I');
-		case c_m3Type_f32:
-			return('f');
-		case c_m3Type_f64:
-			return('d');
+// char m3_type_to_tag(M3ValueType type)
+// {
+// 	switch(type)
+// 	{
+// 		case c_m3Type_none:
+// 			return('v');
+// 		case c_m3Type_i32:
+// 			return('i');
+// 		case c_m3Type_i64:
+// 			return('I');
+// 		case c_m3Type_f32:
+// 			return('f');
+// 		case c_m3Type_f64:
+// 			return('d');
 
-		case c_m3Type_unknown:
-		default:
-			return('!');
-	}
-}
+// 		case c_m3Type_unknown:
+// 		default:
+// 			return('!');
+// 	}
+// }
 
 void orca_runtime_init(orca_runtime* runtime)
 {
@@ -304,6 +304,21 @@ void orca_runtime_init(orca_runtime* runtime)
 
 #include"gles_api_bind_gen.c"
 #include"manual_gles_api.c"
+
+void* quit_on_wasm_init_failure(const char* stage, bb_error err)
+{
+	const char* errStr = bb_error_str(err);
+	log_error("wasm error at init stage '%s': %s\n", errStr);
+
+	const char* options[] = {"OK"};
+	mp_alert_popup("Error",
+	               "The application couldn't load: encountered fatal error at stage '%s': %s",
+	               stage,
+	               errStr);
+
+	mp_request_quit();
+	return((void*)-1);
+}
 
 i32 orca_runloop(void* user)
 {
@@ -339,53 +354,81 @@ i32 orca_runloop(void* user)
 	fread(app->runtime.wasmBytecode.ptr, 1, app->runtime.wasmBytecode.len, file);
 	fclose(file);
 
-	u32 stackSize = 65536;
-	app->runtime.m3Env = m3_NewEnvironment();
+	bb_error wasm_init_err;
+	bb_module_definition_init_opts module_def_init_opts = { .debug_name = bundleNameCString };
+	app->runtime.bbModuleDef = bb_module_definition_init(module_def_init_opts);
+	wasm_init_err = bb_module_definition_decode(&app->runtime.bbModuleDef, app->runtime.wasmBytecode.ptr, app->runtime.wasmBytecode.len);
+	if (wasm_init_err != BB_ERROR_OK)
+	{
+		return quit_on_wasm_init_failure("wasm decode", wasm_init_err);
+	}
 
-	app->runtime.m3Runtime = m3_NewRuntime(app->runtime.m3Env, stackSize, NULL);
-	m3_RuntimeSetMemoryCallbacks(app->runtime.m3Runtime, wasm_memory_resize_callback, wasm_memory_free_callback, &app->runtime.wasmMemory);
+	// TODO [ReubenD] - allow specifying stack size
+	// TODO [ReubenD] - allow overriding wasm memory alloc/resize/free
+
+	// u32 stackSize = 65536;
+	// app->runtime.m3Env = m3_NewEnvironment();
+
+	// app->runtime.m3Runtime = m3_NewRuntime(app->runtime.m3Env, stackSize, NULL);
+	// m3_RuntimeSetMemoryCallbacks(app->runtime.m3Runtime, wasm_memory_resize_callback, wasm_memory_free_callback, &app->runtime.wasmMemory);
 	//NOTE: host memory will be freed when runtime is freed.
 
 	//TODO check errors
-	m3_ParseModule(app->runtime.m3Env, &app->runtime.m3Module, (u8*)app->runtime.wasmBytecode.ptr, app->runtime.wasmBytecode.len);
-	m3_LoadModule(app->runtime.m3Runtime, app->runtime.m3Module);
-	m3_SetModuleName(app->runtime.m3Module, bundleNameCString);
+	// m3_ParseModule(app->runtime.m3Env, &app->runtime.m3Module, (u8*)app->runtime.wasmBytecode.ptr, app->runtime.wasmBytecode.len);
+	// m3_LoadModule(app->runtime.m3Runtime, app->runtime.m3Module);
+	// m3_SetModuleName(app->runtime.m3Module, bundleNameCString);
 
 	mem_arena_clear(mem_scratch());
 
 	//NOTE: bind orca APIs
-	bindgen_link_core_api(app->runtime.m3Module);
-	bindgen_link_canvas_api(app->runtime.m3Module);
-	bindgen_link_clock_api(app->runtime.m3Module);
-	bindgen_link_io_api(app->runtime.m3Module);
-	bindgen_link_gles_api(app->runtime.m3Module);
-	manual_link_gles_api(app->runtime.m3Module);
+	bb_import_package module_imports = bb_import_package_init("*");
+	bindgen_link_core_api(&module_imports);
+	bindgen_link_canvas_api(&module_imports);
+	bindgen_link_clock_api(&module_imports);
+	bindgen_link_io_api(&module_imports);
+	bindgen_link_gles_api(&module_imports);
+	manual_link_gles_api(&module_imports);
 
 	//NOTE: compile
-	M3Result res = m3_CompileModule(app->runtime.m3Module);
-	if(res)
+	// M3Result res = m3_CompileModule(app->runtime.m3Module);
+	// if(res)
+	// {
+	// 	M3ErrorInfo errInfo = {0};
+	// 	m3_GetErrorInfo(app->runtime.m3Runtime, &errInfo);
+
+	// 	log_error("wasm error: %s\n", errInfo.message);
+
+	// 	const char* options[] = {"OK"};
+	// 	mp_alert_popup("Error",
+	// 	               "The application couldn't load: can't compile web assembly module",
+	// 	               1,
+	// 	               options);
+	// 	mp_request_quit();
+	// 	return(-1);
+	// }
+
+	app->runtime.bbModuleInst = bb_module_instance_init(&app->runtime.bbModuleDef);
+	bb_module_instance_instantiate_opts module_inst_instantiate_opts = { .packages = &module_imports, .num_packages = 1, .enable_debug = false, };
+	wasm_init_err = bb_module_instance_instantiate(&app->runtime.bbModuleInst, bb_module_instance_instantiate_opts opts);
+
+	if (wasm_init_err != BB_ERROR_OK)
 	{
-		M3ErrorInfo errInfo = {0};
-		m3_GetErrorInfo(app->runtime.m3Runtime, &errInfo);
-
-		log_error("wasm error: %s\n", errInfo.message);
-
-		const char* options[] = {"OK"};
-		mp_alert_popup("Error",
-		               "The application couldn't load: can't compile web assembly module",
-		               1,
-		               options);
-
-		mp_request_quit();
-		return(-1);
+		return quit_on_wasm_init_failure("wasm instantiate", wasm_init_err);
 	}
+
+	bb_import_package_deinit(&module_imports); // safe to deinit this now that the module has been instantiated
+
+	// TODO up next: expose a cached handle to functions to invoke instead of a string search
 
 	//NOTE: Find and type check event handlers.
 	for(int i=0; i<G_EXPORT_COUNT; i++)
 	{
 		const g_export_desc* desc = &G_EXPORT_DESC[i];
-		IM3Function handler = 0;
-		m3_FindFunction(&handler, app->runtime.m3Runtime, desc->name.ptr);
+
+		bb_func_handle handler;
+		bb_module_instance_find_func(&app->runtime.bbModuleInst, desc->name.ptr);
+		// IM3Function handler = 0;
+		// m3_FindFunction(&handler, app->runtime.m3Runtime, desc->name.ptr);
 
 		if(handler)
 		{

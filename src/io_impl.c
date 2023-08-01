@@ -18,16 +18,17 @@ io_cmp orca_io_wait_single_req(io_req* wasmReq)
 	//NOTE: convert the req->buffer wasm pointer to a native pointer
 	//		for some reason, wasm3 memory doesn't start at the beginning of the block we give it.
 	u64 bufferIndex = (u64)req.buffer & 0xffffffff;
-	u32 memSize = 0;
-	char* memory = (char*)m3_GetMemory(orca->runtime.m3Runtime, &memSize, 0);
+	// u32 memSize = 0;
+	// char* memory = (char*)m3_GetMemory(orca->runtime.m3Runtime, &memSize, 0);
+	bb_slice memory = bb_module_instance_mem_all(orca->runtime.bbModuleInst);
 
-	if(bufferIndex + req.size > memSize)
+	if(bufferIndex + req.size > memory.length)
 	{
 		cmp.error = IO_ERR_ARG;
 	}
 	else
 	{
-		req.buffer = memory + bufferIndex;
+		req.buffer = memory.data + bufferIndex;
 
 		if(req.op == IO_OP_OPEN_AT)
 		{

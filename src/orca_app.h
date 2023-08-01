@@ -10,9 +10,11 @@
 
 #include"platform/platform_io_internal.h"
 
-#include"wasm3.h"
-#include"m3_env.h"
-#include"m3_compile.h"
+#include "bytebox.h"
+
+// #include"wasm3.h"
+// #include"m3_env.h"
+// #include"m3_compile.h"
 
 #define G_EXPORTS(X) \
 	X(G_EXPORT_ON_INIT, "OnInit", "", "") \
@@ -65,12 +67,16 @@ typedef struct orca_runtime
 	str8 wasmBytecode;
 	wasm_memory wasmMemory;
 
+	// bytebox data
+	bb_module_definition bbModuleDef;
+	bb_module_instance bbModuleInst;
+
 	// wasm3 data
-	IM3Environment m3Env;
-	IM3Runtime m3Runtime;
-	IM3Module m3Module;
-	IM3Function exports[G_EXPORT_COUNT];
-	u32 rawEventOffset;
+	// IM3Environment m3Env;
+	// IM3Runtime m3Runtime;
+	// IM3Module m3Module;
+	// IM3Function exports[G_EXPORT_COUNT];
+	// u32 rawEventOffset;
 
 } orca_runtime;
 

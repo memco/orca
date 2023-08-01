@@ -33,30 +33,30 @@ if %target% == orca (
 	copy milepost\bin\milepost.dll.lib bin
 
 	::generate wasm3 api bindings
-	python3 scripts\bindgen.py core src\core_api.json^
+	python3 scripts\bindgen_bb.py core src\core_api.json^
 			--wasm3-bindings src\core_api_bind_gen.c
 
-	python3 scripts\bindgen.py gles src\gles_api.json^
+	python3 scripts\bindgen_bb.py gles src\gles_api.json^
 			--wasm3-bindings src\gles_api_bind_gen.c
 
-	python3 scripts\bindgen.py canvas src\canvas_api.json^
+	python3 scripts\bindgen_bb.py canvas src\canvas_api.json^
 	        --guest-stubs sdk\orca_surface.c^
 	        --guest-include graphics.h^
 	        --wasm3-bindings src\canvas_api_bind_gen.c
 
-	python3 scripts\bindgen.py clock src\clock_api.json^
+	python3 scripts\bindgen_bb.py clock src\clock_api.json^
 	        --guest-stubs sdk\orca_clock.c^
 	        --guest-include platform_clock.h^
 	        --wasm3-bindings src\clock_api_bind_gen.c
 
-	python3 scripts\bindgen.py io^
+	python3 scripts\bindgen_bb.py io^
 	        src\io_api.json^
 	        --guest-stubs sdk\io_stubs.c^
 	        --wasm3-bindings src\io_api_bind_gen.c
 
 	::compile orca
-	set INCLUDES=/I src /I sdk /I ext\wasm3\source /I milepost\src /I milepost\ext
-	set LIBS=/LIBPATH:bin milepost.dll.lib wasm3.lib
+	set INCLUDES=/I src /I sdk /I ext\bytebox\include /I milepost\src /I milepost\ext
+	set LIBS=/LIBPATH:bin milepost.dll.lib ext\bytebox\lib\bytebox.lib
 
 	cl /Zi /Zc:preprocessor /std:c11 /experimental:c11atomics %INCLUDES% src\main.c /link %LIBS% /out:bin\orca.exe
 )

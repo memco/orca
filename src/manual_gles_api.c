@@ -1,29 +1,28 @@
 
-const void* glShaderSource_stub(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t * _sp, void * _mem)
+void glShaderSource_stub(void* userdata, bb_module_instance* module, const bb_val* params, bb_val* returns)
 {
-	i32 shader = *(i32*)&_sp[0];
-	i32 count = *(i32*)&_sp[1];
-	i32 stringArrayOffset = *(i32*)&_sp[2];
-	i32 lengthArrayOffset = *(i32*)&_sp[3];
+	i32 shader = params[0].i32_val;
+	i32 count = params[1].i32_val;
+	i32 stringArrayOffset = params[2].i32_val;
+	i32 lengthArrayOffset = params[3].i32_val;
 
-	int* stringOffsetArray = (int*)((char*)_mem + stringArrayOffset);
+	const int* lengthArray = lengthArrayOffset ? (int*)(bb_module_instance_mem(module, lengthArrayOffset, count * sizeof(int))) : 0;
+	const int* stringOffsetArray = (int*)(bb_module_instance_mem(module, stringArrayOffset, count * sizeof(int)));
 	const char** stringArray = (const char**)mem_arena_alloc_array(mem_scratch(), char*, count);
 	for(int i=0; i<count; i++)
 	{
-		stringArray[i] = (char*)_mem + stringOffsetArray[i];
+		stringArray[i] = (char*)bb_module_instance_mem(module, stringOffsetArray[i], lengthArray ? lengthArray[i] : (size_t)-1);
 	}
 
-	int* lengthArray = lengthArrayOffset ? (int*)((char*)_mem + lengthArrayOffset) : 0;
-
 	glShaderSource(shader, count, stringArray, lengthArray);
-	return(0);
 }
 
-int manual_link_gles_api(IM3Module module)
+int manual_link_gles_api(bb_import_package* package)
 {
-	M3Result res;
-	res = m3_LinkRawFunction(module, "*", "glShaderSource", "v(iiii)", glShaderSource_stub);
-	if(res) { log_error("error: %s\n", res); return(-1); }
+	bb_valtype params[] = {BB_VALTYPE_I32, BB_VALTYPE_I32, BB_VALTYPE_I32, BB_VALTYPE_I32};
+	size_t num_params = 4;
+	bb_error err = bb_import_package_add_function(package, glShaderSource_stub, "glShaderSource", params, num_params, NULL, 0, NULL);
+	if(err != BB_ERROR_OK) { log_error("error: %s\n", bb_error_str(err)); return(-1); }
 
 	return(0);
 }
