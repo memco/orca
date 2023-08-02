@@ -68,9 +68,11 @@ typedef struct orca_runtime
 	wasm_memory wasmMemory;
 
 	// bytebox data
-	bb_module_definition bbModuleDef;
-	bb_module_instance bbModuleInst;
-
+	bb_module_definition* bbModuleDef;
+	bb_module_instance* bbModuleInst;
+	bb_func_handle exports[G_EXPORT_COUNT];
+	u32 rawEventOffset;
+	
 	// wasm3 data
 	// IM3Environment m3Env;
 	// IM3Runtime m3Runtime;

@@ -56,7 +56,7 @@ if %target% == orca (
 
 	::compile orca
 	set INCLUDES=/I src /I sdk /I ext\bytebox\include /I milepost\src /I milepost\ext
-	set LIBS=/LIBPATH:bin milepost.dll.lib ext\bytebox\lib\bytebox.lib
+	set LIBS=/LIBPATH:bin milepost.dll.lib ext\bytebox\lib\bytebox.lib ntdll.lib
 
-	cl /Zi /Zc:preprocessor /std:c11 /experimental:c11atomics %INCLUDES% src\main.c /link %LIBS% /out:bin\orca.exe
+	cl /Zi /Zc:preprocessor /std:c11 /experimental:c11atomics %INCLUDES% src\main.c /link %LIBS% /STACK:8388608,8388608 /out:bin\orca.exe
 )

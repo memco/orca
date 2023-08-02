@@ -196,12 +196,9 @@ for decl in data:
 	paramTypes = []
 	numParams = 0
 	if retTag == 'S':
-		retType = 'BB_VALTYPE_I32' # unused, but we need something to put in the the returns array since 0-size arrays are illegal in C
 		paramTypes.append('BB_VALTYPE_I32')
-	elif retTag == 'v': #no returns
-		retType = 'BB_VALTYPE_I32' #unused but we need a dummy value
-		numReturns = 0
-	else:
+		numParams += 1
+	elif retTag != 'v': #no returns
 		retType = translateTag(retTag)
 		numReturns = 1
 		
@@ -212,16 +209,20 @@ for decl in data:
 		paramTypes.append(translateTag(tag))
 		numParams += 1
 
+	# dummy values to avoid 0-length arrays in C
+	if numReturns == 0:
+		retType = 'BB_VALTYPE_I32'
+
 	if numParams == 0:
-		paramTypes.append('BB_VALTYPE_I32') # unused but need a dummy value to avoid 0-length array
+		paramTypes.append('BB_VALTYPE_I32')
 
 	s += '\t{\n'
 	s += '\t\tbb_valtype params[] = {' + ', '.join(paramTypes) + '};\n'
 	s += '\t\tsize_t num_params = ' + str(len(paramTypes)) + ';\n'
-	s += '\t\tbb_valtype returns[] = {' + retType + '};\n'
+	s += '\t\tbb_valtype return_type = ' + retType + ';\n'
 	s += '\t\tsize_t num_returns = ' + str(numReturns) + ';\n'
 
-	s += '\t\tbb_error err = bb_import_package_add_function(package, ' + cname + '_stub, "' + name + '", params, num_params, returns, num_returns, NULL);\n'
+	s += '\t\tbb_error err = bb_import_package_add_function(package, ' + cname + '_stub, "' + name + '", params, num_params, &return_type, num_returns, NULL);\n'
 	s += '\t\tif(err != BB_ERROR_OK) { log_error("error: %s\\n", bb_error_str(err)); return(-1); }\n'
 	s += '\t}\n'
 

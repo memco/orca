@@ -288,6 +288,20 @@ void log_entry_ui(orca_debug_overlay* overlay, log_entry* entry)
 // 	}
 // }
 
+bool tag_to_valtype(char tag, bb_valtype* out)
+{
+	switch (tag)
+	{
+	case 'i': *out = BB_VALTYPE_I32; return true;
+	case 'I': *out = BB_VALTYPE_I64; return true;
+	case 'f': *out = BB_VALTYPE_F32; return true;
+	case 'F': *out = BB_VALTYPE_F64; return true;
+	case 'd': *out = BB_VALTYPE_F64; return true;
+	}
+
+	return false;
+}
+
 void orca_runtime_init(orca_runtime* runtime)
 {
 	memset(runtime, 0, sizeof(orca_runtime));
@@ -305,19 +319,21 @@ void orca_runtime_init(orca_runtime* runtime)
 #include"gles_api_bind_gen.c"
 #include"manual_gles_api.c"
 
-void* quit_on_wasm_init_failure(const char* stage, bb_error err)
+i32 quit_on_wasm_init_failure(const char* stage, bb_error err)
 {
 	const char* errStr = bb_error_str(err);
-	log_error("wasm error at init stage '%s': %s\n", errStr);
+	log_error("wasm error at init stage '%s': %s\n", stage, errStr);
+
+	str8 msg = str8_pushf(mem_scratch(), "The application couldn't load: encountered fatal error at stage '%s': %s", stage, errStr);
 
 	const char* options[] = {"OK"};
 	mp_alert_popup("Error",
-	               "The application couldn't load: encountered fatal error at stage '%s': %s",
-	               stage,
-	               errStr);
+	               msg.ptr,
+	               1,
+	               options);
 
 	mp_request_quit();
-	return((void*)-1);
+	return(-1);
 }
 
 i32 orca_runloop(void* user)
@@ -357,7 +373,7 @@ i32 orca_runloop(void* user)
 	bb_error wasm_init_err;
 	bb_module_definition_init_opts module_def_init_opts = { .debug_name = bundleNameCString };
 	app->runtime.bbModuleDef = bb_module_definition_init(module_def_init_opts);
-	wasm_init_err = bb_module_definition_decode(&app->runtime.bbModuleDef, app->runtime.wasmBytecode.ptr, app->runtime.wasmBytecode.len);
+	wasm_init_err = bb_module_definition_decode(app->runtime.bbModuleDef, app->runtime.wasmBytecode.ptr, app->runtime.wasmBytecode.len);
 	if (wasm_init_err != BB_ERROR_OK)
 	{
 		return quit_on_wasm_init_failure("wasm decode", wasm_init_err);
@@ -381,13 +397,13 @@ i32 orca_runloop(void* user)
 	mem_arena_clear(mem_scratch());
 
 	//NOTE: bind orca APIs
-	bb_import_package module_imports = bb_import_package_init("*");
-	bindgen_link_core_api(&module_imports);
-	bindgen_link_canvas_api(&module_imports);
-	bindgen_link_clock_api(&module_imports);
-	bindgen_link_io_api(&module_imports);
-	bindgen_link_gles_api(&module_imports);
-	manual_link_gles_api(&module_imports);
+	bb_import_package* module_imports = bb_import_package_init("*");
+	bindgen_link_core_api(module_imports);
+	bindgen_link_canvas_api(module_imports);
+	bindgen_link_clock_api(module_imports);
+	bindgen_link_io_api(module_imports);
+	bindgen_link_gles_api(module_imports);
+	manual_link_gles_api(module_imports);
 
 	//NOTE: compile
 	// M3Result res = m3_CompileModule(app->runtime.m3Module);
@@ -407,16 +423,16 @@ i32 orca_runloop(void* user)
 	// 	return(-1);
 	// }
 
-	app->runtime.bbModuleInst = bb_module_instance_init(&app->runtime.bbModuleDef);
+	app->runtime.bbModuleInst = bb_module_instance_init(app->runtime.bbModuleDef);
 	bb_module_instance_instantiate_opts module_inst_instantiate_opts = { .packages = &module_imports, .num_packages = 1, .enable_debug = false, };
-	wasm_init_err = bb_module_instance_instantiate(&app->runtime.bbModuleInst, bb_module_instance_instantiate_opts opts);
+	wasm_init_err = bb_module_instance_instantiate(app->runtime.bbModuleInst, module_inst_instantiate_opts);
 
 	if (wasm_init_err != BB_ERROR_OK)
 	{
 		return quit_on_wasm_init_failure("wasm instantiate", wasm_init_err);
 	}
 
-	bb_import_package_deinit(&module_imports); // safe to deinit this now that the module has been instantiated
+	bb_import_package_deinit(module_imports); // safe to deinit this now that the module has been instantiated
 
 	// TODO up next: expose a cached handle to functions to invoke instead of a string search
 
@@ -426,46 +442,66 @@ i32 orca_runloop(void* user)
 		const g_export_desc* desc = &G_EXPORT_DESC[i];
 
 		bb_func_handle handler;
-		bb_module_instance_find_func(&app->runtime.bbModuleInst, desc->name.ptr);
+		const bb_error find_func_err = bb_module_instance_find_func(app->runtime.bbModuleInst, desc->name.ptr, &handler);
 		// IM3Function handler = 0;
 		// m3_FindFunction(&handler, app->runtime.m3Runtime, desc->name.ptr);
 
-		if(handler)
+		if(find_func_err == BB_ERROR_OK)
 		{
-			bool checked = false;
-
 			//NOTE: check function signature
-			int retCount = m3_GetRetCount(handler);
-			int argCount = m3_GetArgCount(handler);
-			if(retCount == desc->retTags.len && argCount == desc->argTags.len)
+			bb_func_info func_info = bb_module_instance_func_info(app->runtime.bbModuleInst, handler);
+
+			bool checked = func_info.num_returns == desc->retTags.len && func_info.num_params == desc->argTags.len;
+
+			for(int retIndex = 0; checked && retIndex < func_info.num_returns; retIndex++)
 			{
-				checked = true;
-				for(int retIndex = 0; retIndex < retCount; retIndex++)
+				bb_valtype valtype;
+				if(tag_to_valtype(desc->retTags.ptr[retIndex], &valtype) && valtype != func_info.returns[retIndex])
 				{
-					M3ValueType m3Type = m3_GetRetType(handler, retIndex);
-					char tag = m3_type_to_tag(m3Type);
-
-					if(tag != desc->retTags.ptr[retIndex])
-					{
-						checked = false;
-						break;
-					}
-				}
-				if(checked)
-				{
-					for(int argIndex = 0; argIndex < argCount; argIndex++)
-					{
-						M3ValueType m3Type = m3_GetArgType(handler, argIndex);
-						char tag = m3_type_to_tag(m3Type);
-
-						if(tag != desc->argTags.ptr[argIndex])
-						{
-							checked = false;
-							break;
-						}
-					}
+					checked = false;
 				}
 			}
+
+			for(int argIndex = 0; checked && argIndex < func_info.num_params; argIndex++)
+			{
+				bb_valtype valtype;
+				if(tag_to_valtype(desc->argTags.ptr[argIndex], &valtype) && valtype != func_info.params[argIndex])
+				{
+					checked = false;
+				}
+			}
+
+			// int retCount = m3_GetRetCount(handler);
+			// int argCount = m3_GetArgCount(handler);
+			// if(retCount == desc->retTags.len && argCount == desc->argTags.len)
+			// {
+			// 	checked = true;
+			// 	for(int retIndex = 0; retIndex < retCount; retIndex++)
+			// 	{
+			// 		M3ValueType m3Type = m3_GetRetType(handler, retIndex);
+			// 		char tag = m3_type_to_tag(m3Type);
+
+			// 		if(tag != desc->retTags.ptr[retIndex])
+			// 		{
+			// 			checked = false;
+			// 			break;
+			// 		}
+			// 	}
+			// 	if(checked)
+			// 	{
+			// 		for(int argIndex = 0; argIndex < argCount; argIndex++)
+			// 		{
+			// 			M3ValueType m3Type = m3_GetArgType(handler, argIndex);
+			// 			char tag = m3_type_to_tag(m3Type);
+
+			// 			if(tag != desc->argTags.ptr[argIndex])
+			// 			{
+			// 				checked = false;
+			// 				break;
+			// 			}
+			// 		}
+			// 	}
+			// }
 
 			if(checked)
 			{
@@ -479,8 +515,10 @@ i32 orca_runloop(void* user)
 	}
 
 	//NOTE: get location of the raw event slot
-	IM3Global rawEventGlobal = m3_FindGlobal(app->runtime.m3Module, "_OrcaRawEvent");
-	app->runtime.rawEventOffset = (u32)rawEventGlobal->intValue;
+	// IM3Global rawEventGlobal = m3_FindGlobal(app->runtime.m3Module, "_OrcaRawEvent");
+	// app->runtime.rawEventOffset = (u32)rawEventGlobal->intValue;
+	bb_global rawEventGlobal = bb_module_instance_find_global(app->runtime.bbModuleInst, "_OrcaRawEvent");
+	app->runtime.rawEventOffset = (u32)rawEventGlobal.value->i32_val;
 
 	//NOTE: preopen the app local root dir
 	{
@@ -497,17 +535,22 @@ i32 orca_runloop(void* user)
 	//NOTE: prepare GL surface
 	mg_surface_prepare(app->surface);
 
-	IM3Function* exports = app->runtime.exports;
+	// IM3Function* exports = app->runtime.exports;
+	bb_func_handle* exports = app->runtime.exports;
 
 	//NOTE: call init handler
-	if(exports[G_EXPORT_ON_INIT])
+	if(bb_func_handle_isvalid(exports[G_EXPORT_ON_INIT]))
 	{
-		M3Result err = m3_Call(exports[G_EXPORT_ON_INIT], 0, 0);
-		if(err != NULL)
-		{
-			log_error("runtime error: %s\n", err);
+		bb_error err = bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_ON_INIT], 0, 0, 0, 0, (bb_module_instance_invoke_opts){0});
 
-			str8 msg = str8_pushf(mem_scratch(), "Runtime error: %s\n", err);
+		// M3Result err = m3_Call(exports[G_EXPORT_ON_INIT], 0, 0);
+		// if(err != NULL)
+		if(err != BB_ERROR_OK)
+		{
+			const char* errStr = bb_error_str(err);
+			log_error("runtime error: %s\n", errStr);
+
+			str8 msg = str8_pushf(mem_scratch(), "Runtime error: %s\n", errStr);
 			const char* options[] = {"OK"};
 			mp_alert_popup("Error",
 		               	msg.ptr,
@@ -519,13 +562,14 @@ i32 orca_runloop(void* user)
 		}
 	}
 
-	if(exports[G_EXPORT_FRAME_RESIZE])
+	if(bb_func_handle_isvalid(exports[G_EXPORT_FRAME_RESIZE]))
 	{
 		mp_rect content = mp_window_get_content_rect(app->window);
-		u32 width = (u32)content.w;
-		u32 height = (u32)content.h;
-		const void* args[2] = {&width, &height};
-		m3_Call(exports[G_EXPORT_FRAME_RESIZE], 2, args);
+		const bb_val args[2] = {
+			{ .i32_val = (i32)content.w },
+			{ .i32_val = (i32)content.h },
+		};
+		bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_FRAME_RESIZE], args, 2, 0, 0, (bb_module_instance_invoke_opts){0});
 	}
 
 	ui_set_context(&app->debugOverlay.ui);
@@ -541,14 +585,14 @@ i32 orca_runloop(void* user)
 				ui_process_event(event);
 			}
 
-			if(exports[G_EXPORT_RAW_EVENT])
+			if(bb_func_handle_isvalid(exports[G_EXPORT_RAW_EVENT]))
 			{
 				#ifndef M3_BIG_ENDIAN
 				mp_event* eventPtr = (mp_event*)wasm_memory_offset_to_ptr(&app->runtime.wasmMemory, app->runtime.rawEventOffset);
 				memcpy(eventPtr, event, sizeof(*event));
-
-				const void* args[1] = {&app->runtime.rawEventOffset};
-				m3_Call(exports[G_EXPORT_RAW_EVENT], 1, args);
+				bb_val args[1];
+				args[0].i32_val = app->runtime.rawEventOffset;
+				bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_RAW_EVENT], args, 1, 0, 0, (bb_module_instance_invoke_opts){0});
 				#else
 				log_error("OnRawEvent() is not supported on big endian platforms");
 				#endif
@@ -565,12 +609,18 @@ i32 orca_runloop(void* user)
 				{
 					mp_rect frame = {0, 0, event->move.frame.w, event->move.frame.h};
 
-					if(exports[G_EXPORT_FRAME_RESIZE])
+					if(bb_func_handle_isvalid(exports[G_EXPORT_FRAME_RESIZE]))
 					{
-						u32 width = (u32)event->move.content.w;
-						u32 height = (u32)event->move.content.h;
-						const void* args[2] = {&width, &height};
-						m3_Call(exports[G_EXPORT_FRAME_RESIZE], 2, args);
+						const bb_val args[2] = {
+							{ .i32_val = (i32)(u32)event->move.content.w },
+							{ .i32_val = (i32)(u32)event->move.content.h },
+						};
+						bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_FRAME_RESIZE], args, 2, 0, 0, (bb_module_instance_invoke_opts){0});
+
+						// u32 width = (u32)event->move.content.w;
+						// u32 height = (u32)event->move.content.h;
+						// const void* args[2] = {&width, &height};
+						// m3_Call(exports[G_EXPORT_FRAME_RESIZE], 2, args);
 					}
 				} break;
 
@@ -578,30 +628,41 @@ i32 orca_runloop(void* user)
 				{
 					if(event->key.action == MP_KEY_PRESS)
 					{
-						if(exports[G_EXPORT_MOUSE_DOWN])
+						if(bb_func_handle_isvalid(exports[G_EXPORT_MOUSE_DOWN]))
 						{
-							int key = event->key.code;
-							const void* args[1] = {&key};
-							m3_Call(exports[G_EXPORT_MOUSE_DOWN], 1, args);
+							const bb_val key = {.i32_val = event->key.code };
+							// int key = event->key.code;
+							// const void* args[1] = {&key};
+							// m3_Call(exports[G_EXPORT_MOUSE_DOWN], 1, args);
+							bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_MOUSE_DOWN], &key, 1, 0, 0, (bb_module_instance_invoke_opts){0});
 						}
 					}
 					else
 					{
-						if(exports[G_EXPORT_MOUSE_UP])
+						if(bb_func_handle_isvalid(exports[G_EXPORT_MOUSE_UP]))
 						{
-							int key = event->key.code;
-							const void* args[1] = {&key};
-							m3_Call(exports[G_EXPORT_MOUSE_UP], 1, args);
+							const bb_val key = {.i32_val = event->key.code };
+							// int key = event->key.code;
+							// const void* args[1] = {&key};
+							// m3_Call(exports[G_EXPORT_MOUSE_UP], 1, args);
+							bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_MOUSE_UP], &key, 1, 0, 0, (bb_module_instance_invoke_opts){0});
 						}
 					}
 				} break;
 
 				case MP_EVENT_MOUSE_MOVE:
 				{
-					if(exports[G_EXPORT_MOUSE_MOVE])
+					if(bb_func_handle_isvalid(exports[G_EXPORT_MOUSE_MOVE]))
 					{
-						const void* args[4] = {&event->mouse.x, &event->mouse.y, &event->mouse.deltaX, &event->mouse.deltaY};
-						m3_Call(exports[G_EXPORT_MOUSE_MOVE], 4, args);
+						const bb_val args[4] = {
+							{ .f32_val = event->mouse.x },
+							{ .f32_val = event->mouse.y },
+							{ .f32_val = event->mouse.deltaX },
+							{ .f32_val = event->mouse.deltaY },
+						};
+						// const void* args[4] = {&event->mouse.x, &event->mouse.y, &event->mouse.deltaX, &event->mouse.deltaY};
+						// m3_Call(exports[G_EXPORT_MOUSE_MOVE], 4, args);
+						bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_MOUSE_MOVE], args, 4, 0, 0, (bb_module_instance_invoke_opts){0});
 					}
 				} break;
 
@@ -616,18 +677,22 @@ i32 orca_runloop(void* user)
 						#endif
 						}
 
-						if(exports[G_EXPORT_KEY_DOWN])
+						if(bb_func_handle_isvalid(exports[G_EXPORT_KEY_DOWN]))
 						{
-							const void* args[1] = {&event->key.code};
-							m3_Call(exports[G_EXPORT_KEY_DOWN], 1, args);
+							const bb_val key = {.i32_val = event->key.code };
+							// const void* args[1] = {&event->key.code};
+							// m3_Call(exports[G_EXPORT_KEY_DOWN], 1, args);
+							bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_KEY_DOWN], &key, 1, 0, 0, (bb_module_instance_invoke_opts){0});
 						}
 					}
 					else if(event->key.action == MP_KEY_RELEASE)
 					{
-						if(exports[G_EXPORT_KEY_UP])
+						if(bb_func_handle_isvalid(exports[G_EXPORT_KEY_UP]))
 						{
-							const void* args[1] = {&event->key.code};
-							m3_Call(exports[G_EXPORT_KEY_UP], 1, args);
+							const bb_val key = {.i32_val = event->key.code };
+							// const void* args[1] = {&event->key.code};
+							// m3_Call(exports[G_EXPORT_KEY_UP], 1, args);
+							bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_KEY_UP], &key, 1, 0, 0, (bb_module_instance_invoke_opts){0});
 						}
 					}
 				} break;
@@ -773,10 +838,11 @@ i32 orca_runloop(void* user)
 			mg_render(app->debugOverlay.surface, app->debugOverlay.canvas);
 		}
 
-		if(exports[G_EXPORT_FRAME_REFRESH])
+		if(bb_func_handle_isvalid(exports[G_EXPORT_FRAME_REFRESH]))
 		{
 			mg_surface_prepare(app->surface);
-			m3_Call(exports[G_EXPORT_FRAME_REFRESH], 0, 0);
+			// m3_Call(exports[G_EXPORT_FRAME_REFRESH], 0, 0);
+			bb_module_instance_invoke(app->runtime.bbModuleInst, exports[G_EXPORT_FRAME_REFRESH], 0, 0, 0, 0, (bb_module_instance_invoke_opts){0});
 		}
 
 		if(app->debugOverlay.show)
