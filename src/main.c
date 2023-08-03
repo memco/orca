@@ -423,8 +423,19 @@ i32 orca_runloop(void* user)
 	// 	return(-1);
 	// }
 
+	// bb_set_debug_trace_mode(BB_DEBUG_TRACE_FUNCTION);
+
 	app->runtime.bbModuleInst = bb_module_instance_init(app->runtime.bbModuleDef);
-	bb_module_instance_instantiate_opts module_inst_instantiate_opts = { .packages = &module_imports, .num_packages = 1, .enable_debug = false, };
+	bb_module_instance_instantiate_opts module_inst_instantiate_opts = { 
+		.packages = &module_imports, 
+		.num_packages = 1, 
+		.enable_debug = false,
+		.wasm_memory_config = {
+			.resize_callback = wasm_memory_resize_callback,
+			.free_callback = wasm_memory_free_callback,
+			.userdata = &app->runtime.wasmMemory,
+		},
+	};
 	wasm_init_err = bb_module_instance_instantiate(app->runtime.bbModuleInst, module_inst_instantiate_opts);
 
 	if (wasm_init_err != BB_ERROR_OK)
