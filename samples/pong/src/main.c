@@ -78,15 +78,15 @@ ORCA_EXPORT void OnInit(void)
 
     if(mg_image_is_nil(waterImage))
     {
-		log_error("coulnd't load ball image\n");
+		log_error("couldn't load water image\n");
     }
     if(mg_image_is_nil(ballImage))
     {
-		log_error("coulnd't load ball image\n");
+		log_error("couldn't load ball image\n");
     }
     if(mg_image_is_nil(paddleImage))
     {
-		log_error("coulnd't load paddle image\n");
+		log_error("couldn't load paddle image\n");
     }
 
     str8 fontStr = loadFile(mem_scratch(), STR8("/Literata-SemiBoldItalic.ttf"));
