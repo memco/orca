@@ -119,6 +119,7 @@ for decl in data:
 		s += '\n{\n\t'
 		retTag = decl['ret']['tag']
 
+		firstArgIndex = 0
 		if retTag == 'i':
 			s += 'returns[0].i32_val = '
 		elif retTag == 'I':
@@ -130,11 +131,10 @@ for decl in data:
 		elif retTag == 'S':
 			retTypeName = decl['ret']['name']
 			retTypeCName = decl['ret'].get('cname', retTypeName)
-			s += '*(' + retTypeCName + '*)(bb_module_instance_mem(module, returns[0].i32_val, sizeof(' + retTypeCName + '))) = '
+			s += '*(' + retTypeCName + '*)(bb_module_instance_mem(module, params[0].i32_val, sizeof(' + retTypeCName + '))) = '
+			firstArgIndex = 1
 
 		s += cname + '('
-
-		firstArgIndex = 0
 
 		for i, arg in enumerate(decl['args']):
 			typeName = arg['type']['name']
@@ -209,7 +209,7 @@ for decl in data:
 		paramTypes.append(translateTag(tag))
 		numParams += 1
 
-	# dummy values to avoid 0-length arrays in C
+	# dummy values
 	if numReturns == 0:
 		retType = 'BB_VALTYPE_I32'
 
