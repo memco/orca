@@ -77,6 +77,7 @@ struct bb_module_instance_instantiate_opts
 		bb_wasm_memory_free* free_callback;
 		void* userdata;
 	} wasm_memory_config;
+	size_t stack_size;
 	bool enable_debug;
 };
 typedef struct bb_module_instance_instantiate_opts bb_module_instance_instantiate_opts;

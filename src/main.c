@@ -379,8 +379,6 @@ i32 orca_runloop(void* user)
 		return quit_on_wasm_init_failure("wasm decode", wasm_init_err);
 	}
 
-	// TODO [ReubenD] - allow specifying stack size
-
 	// u32 stackSize = 65536;
 	// app->runtime.m3Env = m3_NewEnvironment();
 
@@ -428,12 +426,14 @@ i32 orca_runloop(void* user)
 	bb_module_instance_instantiate_opts module_inst_instantiate_opts = { 
 		.packages = &module_imports, 
 		.num_packages = 1, 
+		.stack_size = 1024 * 64,
 		.enable_debug = false,
 		.wasm_memory_config = {
 			.resize_callback = wasm_memory_resize_callback,
 			.free_callback = wasm_memory_free_callback,
 			.userdata = &app->runtime.wasmMemory,
 		},
+
 	};
 	wasm_init_err = bb_module_instance_instantiate(app->runtime.bbModuleInst, module_inst_instantiate_opts);
 
