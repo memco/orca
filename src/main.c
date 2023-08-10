@@ -380,7 +380,6 @@ i32 orca_runloop(void* user)
 	}
 
 	// TODO [ReubenD] - allow specifying stack size
-	// TODO [ReubenD] - allow overriding wasm memory alloc/resize/free
 
 	// u32 stackSize = 65536;
 	// app->runtime.m3Env = m3_NewEnvironment();
@@ -445,22 +444,19 @@ i32 orca_runloop(void* user)
 
 	bb_import_package_deinit(module_imports); // safe to deinit this now that the module has been instantiated
 
-	// TODO up next: expose a cached handle to functions to invoke instead of a string search
-
 	//NOTE: Find and type check event handlers.
 	for(int i=0; i<G_EXPORT_COUNT; i++)
 	{
 		const g_export_desc* desc = &G_EXPORT_DESC[i];
 
-		bb_func_handle handler;
-		const bb_error find_func_err = bb_module_instance_find_func(app->runtime.bbModuleInst, desc->name.ptr, &handler);
+		const bb_error find_func_err = bb_module_instance_find_func(app->runtime.bbModuleInst, desc->name.ptr, &app->runtime.exports[i]);
 		// IM3Function handler = 0;
 		// m3_FindFunction(&handler, app->runtime.m3Runtime, desc->name.ptr);
 
 		if(find_func_err == BB_ERROR_OK)
 		{
 			//NOTE: check function signature
-			bb_func_info func_info = bb_module_instance_func_info(app->runtime.bbModuleInst, handler);
+			bb_func_info func_info = bb_module_instance_func_info(app->runtime.bbModuleInst, app->runtime.exports[i]);
 
 			bool checked = func_info.num_returns == desc->retTags.len && func_info.num_params == desc->argTags.len;
 
@@ -514,11 +510,7 @@ i32 orca_runloop(void* user)
 			// 	}
 			// }
 
-			if(checked)
-			{
-				app->runtime.exports[i] = handler;
-			}
-			else
+			if(bb_func_handle_isvalid(app->runtime.exports[i]) == false)
 			{
 				log_error("type mismatch for event handler %.*s\n", (int)desc->name.len, desc->name.ptr);
 			}
