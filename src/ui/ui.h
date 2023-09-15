@@ -477,18 +477,20 @@ typedef enum
     OC_UI_FLAG_BLOCK_MOUSE = (1 << 3),
     OC_UI_FLAG_HOT_ANIMATION = (1 << 4),
     OC_UI_FLAG_ACTIVE_ANIMATION = (1 << 5),
-    //WARN: these two following flags need to be kept as consecutive bits to
+    //WARN: these four following flags need to be kept as consecutive bits to
     //      play well with axis-agnostic functions
-    OC_UI_FLAG_ALLOW_OVERFLOW_X = (1 << 6),
-    OC_UI_FLAG_ALLOW_OVERFLOW_Y = (1 << 7),
-    OC_UI_FLAG_CLIP = (1 << 8),
-    OC_UI_FLAG_DRAW_BACKGROUND = (1 << 9),
-    OC_UI_FLAG_DRAW_FOREGROUND = (1 << 10),
-    OC_UI_FLAG_DRAW_BORDER = (1 << 11),
-    OC_UI_FLAG_DRAW_TEXT = (1 << 12),
-    OC_UI_FLAG_DRAW_PROC = (1 << 13),
+    OC_UI_FLAG_OVERFLOW_ALLOW_X = (1 << 6),
+    OC_UI_FLAG_OVERFLOW_ALLOW_Y = (1 << 7),
+    OC_UI_FLAG_OVERFLOW_FIT_X = (1 << 8),
+    OC_UI_FLAG_OVERFLOW_FIT_Y = (1 << 9),
+    OC_UI_FLAG_CLIP = (1 << 10),
+    OC_UI_FLAG_DRAW_BACKGROUND = (1 << 11),
+    OC_UI_FLAG_DRAW_FOREGROUND = (1 << 12),
+    OC_UI_FLAG_DRAW_BORDER = (1 << 13),
+    OC_UI_FLAG_DRAW_TEXT = (1 << 14),
+    OC_UI_FLAG_DRAW_PROC = (1 << 15),
 
-    OC_UI_FLAG_OVERLAY = (1 << 14),
+    OC_UI_FLAG_OVERLAY = (1 << 16),
 } oc_ui_flags;
 
 struct oc_ui_box

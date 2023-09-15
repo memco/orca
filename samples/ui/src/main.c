@@ -106,7 +106,7 @@ void column_begin(const char* header, f32 widthFraction)
                          | OC_UI_STYLE_BORDER_COLOR
                          | OC_UI_STYLE_BORDER_SIZE
                          | OC_UI_STYLE_ROUNDNESS);
-    oc_ui_box_begin(header, OC_UI_FLAG_DRAW_BACKGROUND | OC_UI_FLAG_DRAW_BORDER);
+    oc_ui_box_begin(header, OC_UI_FLAG_DRAW_BACKGROUND | OC_UI_FLAG_DRAW_BORDER | OC_UI_FLAG_OVERFLOW_FIT_X | OC_UI_FLAG_OVERFLOW_FIT_Y);
 
     oc_ui_style_next(&(oc_ui_style){ .size.width = { OC_UI_SIZE_PARENT, 1 },
                                      .layout.align.x = OC_UI_ALIGN_CENTER },
@@ -128,7 +128,7 @@ void column_begin(const char* header, f32 widthFraction)
                          | OC_UI_STYLE_LAYOUT_ALIGN_X
                          | OC_UI_STYLE_LAYOUT_MARGIN_X
                          | OC_UI_STYLE_LAYOUT_SPACING);
-    oc_ui_box_begin("contents", OC_UI_FLAG_NONE);
+    oc_ui_box_begin("contents", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X | OC_UI_FLAG_OVERFLOW_FIT_Y);
 }
 
 void column_end()
@@ -185,11 +185,11 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
     oc_ui_style_mask defaultMask = OC_UI_STYLE_FONT;
     oc_ui_frame(frameSize, &defaultStyle, defaultMask)
     {
-        oc_ui_style_next(&(oc_ui_style){ .size.width = { OC_UI_SIZE_PARENT, 1, .minSize = 1200 },
-                                         .size.height = { OC_UI_SIZE_PARENT, 1, .minSize = 838 } },
+        oc_ui_style_next(&(oc_ui_style){ .size.width = { OC_UI_SIZE_PARENT, 1, .minSize = 600 },
+                                         .size.height = { OC_UI_SIZE_PARENT, 1, .minSize = 400 } },
                          OC_UI_STYLE_SIZE);
 
-        oc_ui_container("top level", OC_UI_FLAG_NONE)
+        oc_ui_container("top level", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_Y)
         {
             //--------------------------------------------------------------------------------------------
             // Menu bar
@@ -228,7 +228,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                                  | OC_UI_STYLE_LAYOUT_MARGINS
                                  | OC_UI_STYLE_LAYOUT_SPACING);
 
-            oc_ui_container("background", OC_UI_FLAG_DRAW_BACKGROUND)
+            oc_ui_container("background", OC_UI_FLAG_DRAW_BACKGROUND | OC_UI_FLAG_OVERFLOW_FIT_Y)
             {
                 column("Widgets", 1.0 / 3)
                 {
@@ -239,7 +239,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                                      OC_UI_STYLE_SIZE_WIDTH
                                          | OC_UI_STYLE_LAYOUT_AXIS
                                          | OC_UI_STYLE_LAYOUT_SPACING);
-                    oc_ui_container("top", OC_UI_FLAG_NONE)
+                    oc_ui_container("top", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                     {
                         oc_ui_style_next(&(oc_ui_style){ .layout.axis = OC_UI_AXIS_Y,
                                                          .layout.spacing = 24 },
@@ -393,7 +393,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                     // Scrollable panel
                     //-------------------------------------------------------------------------------------
                     oc_ui_style_next(&(oc_ui_style){ .size.width = { OC_UI_SIZE_PARENT, 1 },
-                                                     .size.height = { OC_UI_SIZE_PARENT, 1, 1 },
+                                                     .size.height = { OC_UI_SIZE_PARENT, 1, 1, .minSize = 200 },
                                                      .layout.margin.x = 16,
                                                      .layout.margin.y = 16,
                                                      .layout.spacing = 8,
@@ -555,13 +555,13 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                                                      .layout.spacing = 32 },
                                      OC_UI_STYLE_LAYOUT_AXIS
                                          | OC_UI_STYLE_LAYOUT_SPACING);
-                    oc_ui_container("controls", OC_UI_FLAG_NONE)
+                    oc_ui_container("controls", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                     {
                         oc_ui_style_next(&(oc_ui_style){ .layout.axis = OC_UI_AXIS_Y,
                                                          .layout.spacing = 16 },
                                          OC_UI_STYLE_LAYOUT_AXIS
                                              | OC_UI_STYLE_LAYOUT_SPACING);
-                        oc_ui_container("unselected", OC_UI_FLAG_NONE)
+                        oc_ui_container("unselected", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                         {
                             oc_ui_style_next(&(oc_ui_style){ .fontSize = 16 },
                                              OC_UI_STYLE_FONT_SIZE);
@@ -569,7 +569,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
 
                             oc_ui_style_next(&(oc_ui_style){ .layout.spacing = 4 },
                                              OC_UI_STYLE_LAYOUT_SPACING);
-                            oc_ui_container("size", OC_UI_FLAG_NONE)
+                            oc_ui_container("size", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                             {
                                 f32 widthSlider = (unselectedWidth - 8) / 16;
                                 labeled_slider("Width", &widthSlider);
@@ -644,7 +644,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                                                          .layout.spacing = 16 },
                                          OC_UI_STYLE_LAYOUT_AXIS
                                              | OC_UI_STYLE_LAYOUT_SPACING);
-                        oc_ui_container("selected", OC_UI_FLAG_NONE)
+                        oc_ui_container("selected", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                         {
                             oc_ui_style_next(&(oc_ui_style){ .fontSize = 16 },
                                              OC_UI_STYLE_FONT_SIZE);
@@ -652,7 +652,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
 
                             oc_ui_style_next(&(oc_ui_style){ .layout.spacing = 4 },
                                              OC_UI_STYLE_LAYOUT_SPACING);
-                            oc_ui_container("size", OC_UI_FLAG_NONE)
+                            oc_ui_container("size", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X)
                             {
                                 f32 widthSlider = (selectedWidth - 8) / 16;
                                 labeled_slider("Width", &widthSlider);
@@ -727,7 +727,7 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
                                                          .layout.spacing = 16 },
                                          OC_UI_STYLE_LAYOUT_AXIS
                                              | OC_UI_STYLE_LAYOUT_SPACING);
-                        oc_ui_container("label", OC_UI_FLAG_NONE)
+                        oc_ui_container("label", OC_UI_FLAG_NONE | OC_UI_FLAG_OVERFLOW_FIT_X | OC_UI_FLAG_OVERFLOW_FIT_Y)
                         {
                             oc_ui_style_next(&(oc_ui_style){ .fontSize = 16 },
                                              OC_UI_STYLE_FONT_SIZE);
