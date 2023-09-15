@@ -804,6 +804,10 @@ ORCA_EXPORT void oc_on_frame_refresh(void)
     }
     oc_canvas_select(canvas);
     oc_surface_select(surface);
+
+    oc_set_color(ui.theme->bg0);
+    oc_clear();
+
     oc_ui_draw();
     oc_render(canvas);
     oc_surface_present(surface);
