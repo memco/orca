@@ -1092,7 +1092,7 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
     }
 
     //NOTE: solve downard conflicts
-    int overflowAllowFlag = (OC_UI_FLAG_OVERFLOW_ALLOW_X << axis);
+    int overflowFlag = (OC_UI_FLAG_OVERFLOW_ALLOW_X << axis);
 
     if(box->style.layout.axis == axis)
     {
@@ -1111,7 +1111,7 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
             }
         }
 
-        if(!(box->flags & overflowAllowFlag))
+        if(!(box->flags & overflowFlag))
         {
             //NOTE: then remove excess proportionally to each box slack
             f32 totalContents = sum + box->spacing[axis] + 2 * box->style.layout.margin.c[axis];
@@ -1137,7 +1137,7 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
         {
             if(!oc_ui_box_hidden(child) && !child->style.floating.c[axis])
             {
-                if(!(box->flags & overflowAllowFlag))
+                if(!(box->flags & overflowFlag))
                 {
                     f32 totalContents = child->rect.c[2 + axis] + 2 * box->style.layout.margin.c[axis];
                     f32 excess = oc_clamp_low(totalContents - box->rect.c[2 + axis], 0);
@@ -1158,20 +1158,22 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
     {
         oc_ui_layout_upward_dependent_size(ui, child, axis);
 
-        if(box->style.layout.axis == axis)
+        if(!oc_ui_box_hidden(child)
+           && !child->style.floating.c[axis])
         {
-            sum += child->rect.c[2 + axis];
-        }
-        else
-        {
-            sum = oc_max(sum, child->rect.c[2 + axis]);
+            if(box->style.layout.axis == axis)
+            {
+                sum += child->rect.c[2 + axis];
+            }
+            else
+            {
+                sum = oc_max(sum, child->rect.c[2 + axis]);
+            }
         }
     }
     box->childrenSum[axis] = sum;
 
-    int overflowFitFlag = (OC_UI_FLAG_OVERFLOW_FIT_X << axis);
-
-    if(box->flags & overflowFitFlag)
+    if(!(box->flags & overflowFlag) && !oc_list_empty(box->children))
     {
         f32 minSize = sum + 2 * box->style.layout.margin.c[axis] + box->spacing[axis];
         box->rect.c[2 + axis] = oc_max(minSize, box->rect.c[2 + axis]);
@@ -1209,25 +1211,29 @@ void oc_ui_layout_upward_dependent_fixup(oc_ui_context* ui, oc_ui_box* box, int 
             }
             availableToParentSized -= child->rect.c[2 + axis];
         }
+        availableToParentSized = oc_max(0, availableToParentSized);
 
-        oc_list_for(box->children, child, oc_ui_box, listElt)
+        if(availableToParentSized && relaxSum)
         {
-            oc_ui_size* size = &child->style.size.c[axis];
-            if(size->kind == OC_UI_SIZE_PARENT || size->kind == OC_UI_SIZE_PARENT_MINUS_PIXELS)
+            oc_list_for(box->children, child, oc_ui_box, listElt)
             {
-                f32 wantedSize = 0;
-                if(size->kind == OC_UI_SIZE_PARENT)
+                oc_ui_size* size = &child->style.size.c[axis];
+                if(size->kind == OC_UI_SIZE_PARENT || size->kind == OC_UI_SIZE_PARENT_MINUS_PIXELS)
                 {
-                    wantedSize = availableSize * size->value;
-                }
-                else
-                {
-                    wantedSize = availableSize - size->value;
-                }
+                    f32 wantedSize = 0;
+                    if(size->kind == OC_UI_SIZE_PARENT)
+                    {
+                        wantedSize = availableSize * size->value;
+                    }
+                    else
+                    {
+                        wantedSize = availableSize - size->value;
+                    }
 
-                if(wantedSize > child->rect.c[2 + axis])
-                {
-                    child->rect.c[2 + axis] += availableToParentSized * (size->relax / relaxSum);
+                    if(wantedSize > child->rect.c[2 + axis])
+                    {
+                        child->rect.c[2 + axis] += availableToParentSized * (size->relax / relaxSum);
+                    }
                 }
             }
         }
@@ -1236,11 +1242,7 @@ void oc_ui_layout_upward_dependent_fixup(oc_ui_context* ui, oc_ui_box* box, int 
     oc_list_for(box->children, child, oc_ui_box, listElt)
     {
         //TODO also give back to parent dependent in layout direction if parent has grown
-
-        if(axis == box->style.layout.axis)
-        {
-        }
-        else
+        if(axis != box->style.layout.axis)
         {
             oc_ui_size* size = &child->style.size.c[axis];
             if(size->kind == OC_UI_SIZE_PARENT)
@@ -1332,6 +1334,11 @@ void oc_ui_layout_compute_rect(oc_ui_context* ui, oc_ui_box* box, oc_vec2 pos)
         {
             currentPos.c[layoutAxis] += child->rect.c[2 + layoutAxis] + spacing;
         }
+    }
+    if(isnan(box->rect.w) || isnan(box->rect.h))
+    {
+        oc_log_error("error in box %.*s\n", oc_str8_ip(box->string));
+        OC_ASSERT(0);
     }
 }
 
