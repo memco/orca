@@ -82,6 +82,7 @@ typedef struct oc_ui_size
     oc_ui_size_kind kind;
     f32 value;
     f32 relax;
+    f32 minSize;
 } oc_ui_size;
 
 typedef union oc_ui_box_size

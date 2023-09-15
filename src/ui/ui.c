@@ -1083,11 +1083,11 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
         oc_ui_size* size = &child->style.size.c[axis];
         if(size->kind == OC_UI_SIZE_PARENT)
         {
-            child->rect.c[2 + axis] = availableSize * size->value;
+            child->rect.c[2 + axis] = oc_max(size->minSize, availableSize * size->value);
         }
         else if(size->kind == OC_UI_SIZE_PARENT_MINUS_PIXELS)
         {
-            child->rect.c[2 + axis] = oc_max(0, availableSize - size->value);
+            child->rect.c[2 + axis] = oc_max(size->minSize, oc_max(0, availableSize - size->value));
         }
     }
 
@@ -1122,7 +1122,11 @@ void oc_ui_layout_upward_dependent_size(oc_ui_context* ui, oc_ui_box* box, int a
             oc_list_for(box->children, child, oc_ui_box, listElt)
             {
                 f32 relax = child->style.size.c[axis].relax;
-                child->rect.c[2 + axis] -= alpha * child->rect.c[2 + axis] * relax;
+                f32 minSize = child->style.size.c[axis].minSize;
+                f32 remove = alpha * child->rect.c[2 + axis] * relax;
+
+                child->rect.c[2 + axis] = oc_max(minSize, child->rect.c[2 + axis] - remove);
+
                 sum += child->rect.c[2 + axis];
             }
         }
